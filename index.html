@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Draw Your Text</title>
+  <title>Draw Your Text - Testing Interface</title>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.1/dist/tesseract.min.js"></script>
   <style>
     body {
@@ -123,6 +123,76 @@
         opacity: 0;
       }
     }
+
+    .testing-interface {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      margin-top: 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    }
+
+    .target-text {
+      background: #f0f0f0;
+      padding: 15px;
+      border-radius: 5px;
+      margin: 10px 0;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+
+    .current-target {
+      background: #e0e0ff;
+    }
+
+    .testing-controls {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .testing-controls button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 5px;
+      background: #ddd;
+      cursor: pointer;
+    }
+
+    .testing-controls button.active {
+      background: #4CAF50;
+      color: white;
+    }
+
+    .metrics-display {
+      margin-top: 10px;
+      padding: 10px;
+      background: #f8f8f8;
+      border-radius: 5px;
+    }
+
+    .match-status {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 5px;
+      font-weight: bold;
+    }
+
+    .match-status.correct {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .match-status.incorrect {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    .match-details {
+      margin-top: 5px;
+      font-size: 14px;
+      font-weight: normal;
+    }
   </style>
 </head>
 <body>
@@ -148,6 +218,21 @@
         <button id="backspaceBtn">⌫</button>
       </div>
       <button id="copyBtn">Copy Text</button>
+    </div>
+  </div>
+
+  <div class="testing-interface">
+    <h3>Testing Interface</h3>
+    <div class="testing-controls">
+      <button id="toggleTestingBtn">Enable Testing Mode</button>
+      <button id="nextSentenceBtn" disabled>Next Sentence</button>
+      <button id="resetTestBtn" disabled>Reset Test</button>
+    </div>
+    <div id="targetText" class="target-text"></div>
+    <div id="matchStatus" class="match-status"></div>
+    <div class="metrics-display">
+      <h4>Test Progress</h4>
+      <div id="testProgress">Sentence 0/20</div>
     </div>
   </div>
 
@@ -232,6 +317,39 @@
       }
     }
 
+    // yo sid I'm leaving you a bunch of comments for the textStream implementation. It should help give a clear idea
+    // of what's going on with the test/stream so you can do the metrics extraction
+    // the textStream array has everything you need. each event has a timestamp and the exact character that was typed
+    // for wpm you'll want to look at the time between each 'insert' event in the textStream
+    // the 'currentText' field shows you what the text looked like at each point which you should prob use for msd
+    // btw we're ignoring punctuation and case when checking matches, so you prob want to do the same for msd
+    let testData = {
+      startTime: null,
+      entries: [],
+      currentSentence: null,
+      results: [],
+      textStream: []  // this is the main thing you'll need.it has every single keystroke with timestamps
+    };
+
+    // this function records every single thing that happens
+    //  timestamp is in milliseconds since the start of the test which you should keep in mind for calculating wpm
+    // the 'type' field tells you what kind of event it was like 'insert' for typing, 'delete' for backspace, etc
+    function recordTextStreamEvent(type, value, position) {
+      if (!isTestingMode) return;
+      
+      const event = {
+        timestamp: Date.now(),
+        type,           // insert, delete, cursor_move
+        value,          // character or action
+        position,       // positoin of the cursor
+        target: testData.currentSentence,
+        currentText: textContent
+      };
+      
+      testData.textStream.push(event);
+      console.log('Text Stream Event:', event); // you can see all this data in the browser console
+    }
+
     function recognizeText() {
       const imageDataURL = canvas.toDataURL('image/png');
       Tesseract.recognize(
@@ -241,10 +359,35 @@
       ).then(({ data: { text } }) => {
         const cleanText = text.replace(/\n/g, ' ').trim();
         if (cleanText) {
+          // this where we record each character as it's typed
+          // important for wpm cuz itgives you the exact time each character was entered
+          // we're recording them one at a time so you can calculate the time between each character
+          for (let i = 0; i < cleanText.length; i++) {
+            const char = cleanText[i];
+            textContent =
+              textContent.slice(0, cursorIndex) + char + textContent.slice(cursorIndex);
+            cursorIndex++;
+            recordTextStreamEvent('insert', char, cursorIndex - 1);
+          }
+          // adding a space after each word is also recorded as a separate event
           textContent =
-            textContent.slice(0, cursorIndex) + cleanText + ' ' + textContent.slice(cursorIndex);
-          cursorIndex += cleanText.length + 1;
+            textContent.slice(0, cursorIndex) + ' ' + textContent.slice(cursorIndex);
+          cursorIndex++;
+          recordTextStreamEvent('insert', ' ', cursorIndex - 1);
+          
           renderOutput();
+
+          if (isTestingMode) {
+            // this is where we check if the text matches the target
+            // for msd you might want to use a similar comparison but with a different algorithm
+            // rn we're just doing an exact match after removing punctuation and case
+            const matchResult = checkSentenceMatch(cleanText, testData.currentSentence);
+            testData.results.push(matchResult);
+            
+            // recording when each sentence is done which might be useful for you for calcuating wpm per sentence
+            recordTextStreamEvent('sentence_complete', cleanText, cursorIndex);
+            
+          }
         }
       });
     }
@@ -268,9 +411,11 @@
 
     function backspaceOutput() {
       if (cursorIndex > 0) {
+        const deletedChar = textContent[cursorIndex - 1];
         textContent = textContent.slice(0, cursorIndex - 1) + textContent.slice(cursorIndex);
         cursorIndex--;
         renderOutput();
+        recordTextStreamEvent('delete', deletedChar, cursorIndex);
       }
     }
 
@@ -300,6 +445,7 @@
       if (cursorIndex > 0) {
         cursorIndex--;
         renderOutput();
+        recordTextStreamEvent('cursor_move', 'left', cursorIndex);
       }
     });
 
@@ -307,6 +453,7 @@
       if (cursorIndex < textContent.length) {
         cursorIndex++;
         renderOutput();
+        recordTextStreamEvent('cursor_move', 'right', cursorIndex);
       }
     });
 
@@ -320,6 +467,139 @@
     canvas.addEventListener('mouseleave', endDraw);
 
     renderOutput();
+
+    const targetSentences = [
+      "She packed twelve blue pens in her small bag.",
+      "Every bird sang sweet songs in the quiet dawn.",
+      "They watched clouds drift across the golden sky.",
+      "A clever mouse slipped past the sleepy cat.",
+      "Green leaves danced gently in the warm breeze.",
+      "He quickly wrote notes before the test began.",
+      "The tall man wore boots made of soft leather.",
+      "Old clocks ticked loudly in the silent room.",
+      "She smiled while sipping tea on the front porch.",
+      "We found a hidden path behind the old barn.",
+      "Sunlight streamed through cracks in the ceiling.",
+      "Dogs barked at shadows moving through the yard.",
+      "Rain tapped softly against the window glass.",
+      "Bright stars twinkled above the quiet valley.",
+      "He tied the package with ribbon and string.",
+      "A sudden breeze blew papers off the desk.",
+      "The curious child opened every single drawer.",
+      "Fresh apples fell from the heavy tree limbs.",
+      "The artist painted scenes from her memory.",
+      "They danced all night under the glowing moon."
+    ];
+
+    let currentSentenceIndex = 0;
+    let isTestingMode = false;
+
+    const toggleTestingBtn = document.getElementById('toggleTestingBtn');
+    const nextSentenceBtn = document.getElementById('nextSentenceBtn');
+    const resetTestBtn = document.getElementById('resetTestBtn');
+    const targetText = document.getElementById('targetText');
+    const testProgress = document.getElementById('testProgress');
+    const matchStatus = document.getElementById('matchStatus');
+
+    // right now it's just doing a simple comparison after cleaning up the text
+    function checkSentenceMatch(predicted, target) {
+      const cleanPredicted = predicted.replace(/[.,!?]/g, '').toLowerCase().trim();
+      const cleanTarget = target.replace(/[.,!?]/g, '').toLowerCase().trim();
+      
+      const isMatch = cleanPredicted === cleanTarget;
+      const matchDetails = {
+        isMatch,
+        predicted: cleanPredicted,
+        target: cleanTarget,
+        timestamp: Date.now()
+      };
+      
+      matchStatus.textContent = isMatch ? '✓ Correct Match!' : '✗ Incorrect Match';
+      matchStatus.className = `match-status ${isMatch ? 'correct' : 'incorrect'}`;
+      
+      const details = document.createElement('div');
+      details.className = 'match-details';
+      if (!isMatch) {
+        details.textContent = `Expected: "${target}"\nGot: "${predicted}"`;
+      }
+      matchStatus.appendChild(details);
+      
+      return matchDetails;
+    }
+
+    function initializeTesting() {
+      targetText.textContent = targetSentences[currentSentenceIndex];
+      testProgress.textContent = `Sentence ${currentSentenceIndex + 1}/20`;
+      matchStatus.textContent = '';
+      matchStatus.className = 'match-status';
+    }
+
+    toggleTestingBtn.addEventListener('click', () => {
+      isTestingMode = !isTestingMode;
+      toggleTestingBtn.textContent = isTestingMode ? 'Disable Testing Mode' : 'Enable Testing Mode';
+      toggleTestingBtn.classList.toggle('active');
+      nextSentenceBtn.disabled = !isTestingMode;
+      resetTestBtn.disabled = !isTestingMode;
+      
+      if (isTestingMode) {
+        testData.startTime = Date.now();
+        testData.currentSentence = targetSentences[currentSentenceIndex];
+        testData.entries = [];
+        testData.results = [];
+        testData.textStream = [];
+        recordTextStreamEvent('test_start', testData.currentSentence, 0);
+      }
+    });
+
+    nextSentenceBtn.addEventListener('click', () => {
+      if (currentSentenceIndex < targetSentences.length - 1) {
+        if (testData.entries.length > 0) {
+          const lastEntry = testData.entries[testData.entries.length - 1];
+          const matchResult = checkSentenceMatch(lastEntry.value, testData.currentSentence);
+          testData.results.push(matchResult);
+        }
+        
+        currentSentenceIndex++;
+        initializeTesting();
+        testData.startTime = Date.now();
+        testData.currentSentence = targetSentences[currentSentenceIndex];
+        testData.entries = [];
+        recordTextStreamEvent('sentence_start', testData.currentSentence, 0);
+      }
+    });
+
+    // resetting test handler (lowk sometimes this doesn't work)
+    resetTestBtn.addEventListener('click', () => {
+      currentSentenceIndex = 0;
+      initializeTesting();
+      testData.startTime = Date.now();
+      testData.currentSentence = targetSentences[currentSentenceIndex];
+      testData.entries = [];
+      testData.results = [];
+      testData.textStream = [];
+      recordTextStreamEvent('test_start', testData.currentSentence, 0);
+    });
+
+    const originalOutputBox = outputBox.textContent;
+    Object.defineProperty(outputBox, 'textContent', {
+      set: function(value) {
+        if (isTestingMode) {
+          const timestamp = Date.now();
+          const entry = {
+            timestamp,
+            value,
+            target: testData.currentSentence
+          };
+          testData.entries.push(entry);
+        }
+        this.textContent = value;
+      },
+      get: function() {
+        return this.textContent;
+      }
+    });
+
+    initializeTesting();
   </script>
 </body>
 </html>
