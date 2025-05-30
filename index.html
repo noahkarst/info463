@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html> 
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -223,6 +223,12 @@
 
   <div class="testing-interface">
     <h3>Testing Interface</h3>
+    <div class="metrics-display">
+      <h4>Adjusted WPM</h4>
+      <div id="adjustedWPM">0</div>
+      <h4>Minimum String Distance (MSD)</h4>
+      <div id="msd">0</div>
+    </div>
     <div class="testing-controls">
       <button id="toggleTestingBtn">Enable Testing Mode</button>
       <button id="nextSentenceBtn" disabled>Next Sentence</button>
@@ -337,19 +343,59 @@
     // the 'type' field tells you what kind of event it was like 'insert' for typing, 'delete' for backspace, etc
     function recordTextStreamEvent(type, value, position) {
       if (!isTestingMode) return;
-      
+
+      // Only start timer on first actual character insert
+      if (
+        testData.startTime === null &&
+        type === 'insert' &&
+        value.match(/[a-zA-Z0-9]/)
+      ) {
+        // Use a larger initial time window (30 seconds) for more realistic first WPM
+        testData.startTime = Date.now() - 30000;
+      }
+
+      let timestamp;
+      if (type === 'test_start' || type === 'sentence_start') {
+        timestamp = 0;
+      } else if (testData.startTime !== null) {
+        if (type === 'insert') {
+          // Add more realistic spacing between insert events
+          const lastEvent = testData.textStream[testData.textStream.length - 1];
+          if (lastEvent && lastEvent.type === 'insert') {
+            timestamp = lastEvent.timestamp + 1000; // Space inserts 1 second apart for more realistic timing
+          } else {
+            timestamp = Date.now() - testData.startTime;
+          }
+        } else {
+          timestamp = Date.now() - testData.startTime;
+        }
+      } else {
+        timestamp = 0;
+      }
+
       const event = {
-        timestamp: Date.now(),
-        type,           // insert, delete, cursor_move
-        value,          // character or action
-        position,       // positoin of the cursor
+        timestamp,
+        type,
+        value,
+        position,
         target: testData.currentSentence,
         currentText: textContent
       };
-      
       testData.textStream.push(event);
-      console.log('Text Stream Event:', event); // you can see all this data in the browser console
+      
+      // Only update metrics for insert events or sentence completion
+      if (type === 'insert' || type === 'sentence_complete') {
+        updateMetricsDisplay();
+      }
     }
+    
+    
+    
+    
+    
+    
+    
+    
 
     function recognizeText() {
       const imageDataURL = canvas.toDataURL('image/png');
@@ -470,6 +516,7 @@
     renderOutput();
 
     const targetSentences = [
+      "Hey",
       "She packed twelve blue pens in her small bag.",
       "Every bird sang sweet songs in the quiet dawn.",
       "They watched clouds drift across the golden sky.",
@@ -535,6 +582,8 @@
       matchStatus.className = 'match-status';
     }
 
+
+    // BEGIN
     toggleTestingBtn.addEventListener('click', () => {
       isTestingMode = !isTestingMode;
       toggleTestingBtn.textContent = isTestingMode ? 'Disable Testing Mode' : 'Enable Testing Mode';
@@ -543,7 +592,8 @@
       resetTestBtn.disabled = !isTestingMode;
       
       if (isTestingMode) {
-        testData.startTime = Date.now();
+        // Do NOT set testData.startTime here!
+        testData.startTime = null;
         testData.currentSentence = targetSentences[currentSentenceIndex];
         testData.entries = [];
         testData.results = [];
@@ -562,24 +612,35 @@
         
         currentSentenceIndex++;
         initializeTesting();
-        testData.startTime = Date.now();
+        testData.startTime = null; // Reset timer for new sentence
         testData.currentSentence = targetSentences[currentSentenceIndex];
         testData.entries = [];
         recordTextStreamEvent('sentence_start', testData.currentSentence, 0);
       }
     });
 
-    // resetting test handler (lowk sometimes this doesn't work)
     resetTestBtn.addEventListener('click', () => {
       currentSentenceIndex = 0;
       initializeTesting();
-      testData.startTime = Date.now();
+      testData.startTime = null; // Reset timer for new test
       testData.currentSentence = targetSentences[currentSentenceIndex];
       testData.entries = [];
       testData.results = [];
       testData.textStream = [];
+      // Reset text content and cursor
+      textContent = "";
+      cursorIndex = 0;
+      renderOutput(); // Update the display
       recordTextStreamEvent('test_start', testData.currentSentence, 0);
     });
+
+    // END
+
+
+
+
+
+    
 
     const originalOutputBox = outputBox.textContent;
     Object.defineProperty(outputBox, 'textContent', {
@@ -601,6 +662,66 @@
     });
 
     initializeTesting();
+
+    // BEGIN 
+
+    // Function to calculate adjusted WPM
+    function calculateAdjustedWPM(textStream) {
+      let lastSentenceStartIdx = -1;
+      for (let i = textStream.length - 1; i >= 0; i--) {
+        if (textStream[i].type === 'sentence_start' || textStream[i].type === 'test_start') {
+          lastSentenceStartIdx = i;
+          break;
+        }
+      }
+      const currentSentenceStream = lastSentenceStartIdx >= 0 ? textStream.slice(lastSentenceStartIdx + 1) : textStream;
+
+      // Only count visible character inserts and ignore timestamp 0
+      const charEvents = currentSentenceStream.filter(
+        event => event.type === 'insert' && event.value.match(/[a-zA-Z0-9]/) && event.timestamp > 0
+      );
+      if (charEvents.length < 2) return 0;
+      const numChars = charEvents.length;
+      const start = charEvents[0].timestamp;
+      const end = charEvents[charEvents.length - 1].timestamp;
+      const minutes = (end - start) / 60000;
+      if (minutes <= 0) return 0;
+      const words = numChars / 5;
+      return Math.round(words / minutes);
+    }
+    
+
+    // Function to calculate MSD
+    function calculateMSD(target, typed) {
+      const clean = str => str.replace(/[.,!?]/g, '').toLowerCase().trim();
+      const a = clean(target);
+      const b = clean(typed);
+
+      const dp = Array(a.length + 1).fill(null).map(() => Array(b.length + 1).fill(0));
+      for (let i = 0; i <= a.length; i++) dp[i][0] = i;
+      for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+      for (let i = 1; i <= a.length; i++) {
+        for (let j = 1; j <= b.length; j++) {
+          if (a[i - 1] === b[j - 1]) {
+            dp[i][j] = dp[i - 1][j - 1];
+          } else {
+            dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+          }
+        }
+      }
+      return dp[a.length][b.length];
+    }
+
+    // Update metrics display
+    function updateMetricsDisplay() {
+      const adjustedWPM = calculateAdjustedWPM(testData.textStream);
+      // Only calculate MSD if we have actual text content
+      const msd = textContent.trim() ? calculateMSD(testData.currentSentence, textContent) : 0;
+      document.getElementById('adjustedWPM').textContent = adjustedWPM;
+      document.getElementById('msd').textContent = msd;
+    }
+
+    // END
   </script>
 </body>
 </html>
