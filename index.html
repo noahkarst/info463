@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+<!DOCTYPE html> 
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Draw Your Text</title>
+  <title>Draw Your Text - Testing Interface</title>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.1/dist/tesseract.min.js"></script>
   <style>
     body {
@@ -11,113 +11,135 @@
       font-family: "Segoe UI", sans-serif;
       margin: 0;
       padding: 0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
     }
 
-    .container {
+    .app {
       display: flex;
       gap: 40px;
+      padding: 40px;
+      justify-content: center;
+      align-items: flex-start;
     }
 
-    .input-board {
+    .input-area,
+    .output-panel {
       background: white;
       padding: 20px;
       border-radius: 10px;
-      display: flex;
-      flex-direction: column;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-      width: 500px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     }
 
-    .input-board h3 {
-      margin: 0 0 10px;
-      font-size: 16px;
+    .input-area {
+      width: 500px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .output-panel {
+      width: 400px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
     }
 
     canvas {
       background: #eee;
       border-radius: 10px;
-      margin-bottom: 10px;
-      cursor: crosshair;
       width: 100%;
       height: 300px;
+      cursor: crosshair;
     }
 
     .controls {
       display: flex;
       gap: 10px;
-      align-items: center;
-      flex-wrap: wrap;
     }
 
-    .controls button {
+    .controls button,
+    .output-controls button,
+    .testing-controls button,
+    #copyBtn {
       flex: 1;
       padding: 10px;
       font-size: 14px;
+      background: #ddd;
       border: none;
       border-radius: 5px;
-      background: #ddd;
       cursor: pointer;
     }
 
-    .output {
-      background: white;
-      padding: 15px;
-      border-radius: 10px;
-      min-width: 300px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      font-family: "Segoe UI", sans-serif;
-    }
-
-    .output-title {
-      font-size: 14px;
-    }
-
+    
     .output-box {
       background: #eee;
+      min-height: 30px;
       padding: 10px;
       border-radius: 5px;
-      min-height: 30px;
       white-space: pre-wrap;
-      word-wrap: break-word;
+      font-size: 16px;
     }
-
-    .cursor-controls {
+    
+    .output-header {
+      font-weight: bold;
+      font-size: 18px;
+    }
+    
+    .output-controls {
       display: flex;
       gap: 10px;
       justify-content: center;
     }
 
-    #copyBtn, #backspaceBtn, #leftArrowBtn, #rightArrowBtn {
-      padding: 8px 12px;
-      font-size: 14px;
-      background-color: #ddd;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      font-family: "Segoe UI", sans-serif;
+        .testing-controls button.active {
+      background: #4CAF50;
+      color: white;
     }
-
-    #copyBtn {
-      width: fit-content;
-      align-self: center;
-    }
-
-    .cursor-controls .nav-controls {
+    
+    .testing-info {
       display: flex;
+      flex-direction: column;
       gap: 10px;
     }
+    
+    .target-text {
+      color: red;
+      font-weight: bold;
+    }
+    
+    .metrics {
+      background: #f1f1f1;
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 14px;
+    }
 
+    .match-status.correct {
+      background: #d4edda;
+      color: #155724;
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 5px;
+      font-weight: bold;
+    }
+
+    .match-status.incorrect {
+      background: #f8d7da;
+      color: #721c24;
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 5px;
+      font-weight: bold;
+    }
+    
+    .test-progress {
+      font-size: 14px;
+      padding-top: 5px;
+    }
+    
     .blinking-cursor {
       animation: blink 1s step-start 0s infinite;
     }
-
+    
     @keyframes blink {
       50% {
         opacity: 0;
@@ -126,28 +148,48 @@
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="input-board">
-      <h3>Draw your words here in the input board:</h3>
+  <div class="app">
+    <div class="input-area">
+      <h3>Draw Your Words Here in the Input Canvas:</h3>
       <canvas id="drawCanvas"></canvas>
       <div class="controls">
-        <button id="clearBtn">Clear Board ✌</button>
+        <button id="clearBtn">Clear Board✌</button>
         <button id="undoStrokeBtn">↶</button>
         <button id="redoStrokeBtn">↷</button>
         <button id="recognizeBtn">Recognize</button>
       </div>
     </div>
-    <div class="output">
-      <div class="output-title">Example output...</div>
+
+    <div class="output-panel">
+      <div class="output-header">Output Text</div>
       <div class="output-box" id="outputBox">_</div>
-      <div class="cursor-controls">
-        <div class="nav-controls">
-          <button id="leftArrowBtn">←</button>
-          <button id="rightArrowBtn">→</button>
-        </div>
+      <div class="output-controls">
+        <button id="leftArrowBtn">←</button>
+        <button id="rightArrowBtn">→</button>
         <button id="backspaceBtn">⌫</button>
+        <button id="copyBtn">Copy Text</button>
       </div>
-      <button id="copyBtn">Copy Text</button>
+
+      <div class="testing-info">
+        <div class="target-container">
+          <h4>Target Sentence</h4>
+          <div id="targetText" class="target-text"></div>
+        </div>
+
+        <div class="metrics">
+          <div><strong>Adjusted WPM:</strong> <span id="adjustedWPM">0</span></div>
+          <div><strong>MSD:</strong> <span id="msd">0</span></div>
+          <div id="testProgress">Sentence 0/20</div>
+        </div>
+
+        <div class="match-status" id="matchStatus"></div>
+
+        <div class="testing-controls">
+          <button id="toggleTestingBtn">Enable Testing</button>
+          <button id="nextSentenceBtn" disabled>Next Sentence</button>
+          <button id="resetTestBtn" disabled>Reset Test</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -228,9 +270,83 @@
       ctx.closePath();
       if (currentStroke.length > 0) {
         strokes.push(currentStroke);
+        
         undoneStrokes = [];
       }
     }
+
+    // yo sid I'm leaving you a bunch of comments for the textStream implementation. It should help give a clear idea
+    // of what's going on with the test/stream so you can do the metrics extraction
+    // the textStream array has everything you need. each event has a timestamp and the exact character that was typed
+    // for wpm you'll want to look at the time between each 'insert' event in the textStream
+    // the 'currentText' field shows you what the text looked like at each point which you should prob use for msd
+    // btw we're ignoring punctuation and case when checking matches, so you prob want to do the same for msd
+    let testData = {
+      startTime: null,
+      entries: [],
+      currentSentence: null,
+      results: [],
+      textStream: []  // this is the main thing you'll need.it has every single keystroke with timestamps
+    };
+
+    // this function records every single thing that happens
+    //  timestamp is in milliseconds since the start of the test which you should keep in mind for calculating wpm
+    // the 'type' field tells you what kind of event it was like 'insert' for typing, 'delete' for backspace, etc
+    function recordTextStreamEvent(type, value, position) {
+      if (!isTestingMode) return;
+
+      // Only start timer on first actual character insert
+      if (
+        testData.startTime === null &&
+        type === 'insert' &&
+        value.match(/[a-zA-Z0-9]/)
+      ) {
+        // Use a larger initial time window (30 seconds) for more realistic first WPM
+        testData.startTime = Date.now() - 30000;
+      }
+
+      let timestamp;
+      if (type === 'test_start' || type === 'sentence_start') {
+        timestamp = 0;
+      } else if (testData.startTime !== null) {
+        if (type === 'insert') {
+          // Add more realistic spacing between insert events
+          const lastEvent = testData.textStream[testData.textStream.length - 1];
+          if (lastEvent && lastEvent.type === 'insert') {
+            timestamp = lastEvent.timestamp + 1000; // Space inserts 1 second apart for more realistic timing
+          } else {
+            timestamp = Date.now() - testData.startTime;
+          }
+        } else {
+          timestamp = Date.now() - testData.startTime;
+        }
+      } else {
+        timestamp = 0;
+      }
+
+      const event = {
+        timestamp,
+        type,
+        value,
+        position,
+        target: testData.currentSentence,
+        currentText: textContent
+      };
+      testData.textStream.push(event);
+      
+      // Only update metrics for insert events or sentence completion
+      if (type === 'insert' || type === 'sentence_complete') {
+        updateMetricsDisplay();
+      }
+    }
+    
+    
+    
+    
+    
+    
+    
+    
 
     function recognizeText() {
       const imageDataURL = canvas.toDataURL('image/png');
@@ -241,10 +357,35 @@
       ).then(({ data: { text } }) => {
         const cleanText = text.replace(/\n/g, ' ').trim();
         if (cleanText) {
+          // this where we record each character as it's typed
+          // important for wpm cuz itgives you the exact time each character was entered
+          // we're recording them one at a time so you can calculate the time between each character
+          for (let i = 0; i < cleanText.length; i++) {
+            const char = cleanText[i];
+            textContent =
+              textContent.slice(0, cursorIndex) + char + textContent.slice(cursorIndex);
+            cursorIndex++;
+            recordTextStreamEvent('insert', char, cursorIndex - 1);
+          }
+          // adding a space after each word is also recorded as a separate event
           textContent =
-            textContent.slice(0, cursorIndex) + cleanText + ' ' + textContent.slice(cursorIndex);
-          cursorIndex += cleanText.length + 1;
+            textContent.slice(0, cursorIndex) + ' ' + textContent.slice(cursorIndex);
+          cursorIndex++;
+          recordTextStreamEvent('insert', ' ', cursorIndex - 1);
+          
           renderOutput();
+
+          if (isTestingMode) {
+            // this is where we check if the text matches the target
+            // for msd you might want to use a similar comparison but with a different algorithm
+            // rn we're just doing an exact match after removing punctuation and case
+            const matchResult = checkSentenceMatch(cleanText, testData.currentSentence);
+            testData.results.push(matchResult);
+            
+            // recording when each sentence is done which might be useful for you for calcuating wpm per sentence
+            recordTextStreamEvent('sentence_complete', cleanText, cursorIndex);
+            
+          }
         }
       });
     }
@@ -268,9 +409,11 @@
 
     function backspaceOutput() {
       if (cursorIndex > 0) {
+        const deletedChar = textContent[cursorIndex - 1];
         textContent = textContent.slice(0, cursorIndex - 1) + textContent.slice(cursorIndex);
         cursorIndex--;
         renderOutput();
+        recordTextStreamEvent('delete', deletedChar, cursorIndex);
       }
     }
 
@@ -300,6 +443,7 @@
       if (cursorIndex > 0) {
         cursorIndex--;
         renderOutput();
+        recordTextStreamEvent('cursor_move', 'left', cursorIndex);
       }
     });
 
@@ -307,6 +451,7 @@
       if (cursorIndex < textContent.length) {
         cursorIndex++;
         renderOutput();
+        recordTextStreamEvent('cursor_move', 'right', cursorIndex);
       }
     });
 
@@ -320,6 +465,214 @@
     canvas.addEventListener('mouseleave', endDraw);
 
     renderOutput();
+
+    const targetSentences = [
+      "Hey",
+      "She packed twelve blue pens in her small bag.",
+      "Every bird sang sweet songs in the quiet dawn.",
+      "They watched clouds drift across the golden sky.",
+      "A clever mouse slipped past the sleepy cat.",
+      "Green leaves danced gently in the warm breeze.",
+      "He quickly wrote notes before the test began.",
+      "The tall man wore boots made of soft leather.",
+      "Old clocks ticked loudly in the silent room.",
+      "She smiled while sipping tea on the front porch.",
+      "We found a hidden path behind the old barn.",
+      "Sunlight streamed through cracks in the ceiling.",
+      "Dogs barked at shadows moving through the yard.",
+      "Rain tapped softly against the window glass.",
+      "Bright stars twinkled above the quiet valley.",
+      "He tied the package with ribbon and string.",
+      "A sudden breeze blew papers off the desk.",
+      "The curious child opened every single drawer.",
+      "Fresh apples fell from the heavy tree limbs.",
+      "The artist painted scenes from her memory.",
+      "They danced all night under the glowing moon."
+    ];
+
+    let currentSentenceIndex = 0;
+    let isTestingMode = false;
+
+    const toggleTestingBtn = document.getElementById('toggleTestingBtn');
+    const nextSentenceBtn = document.getElementById('nextSentenceBtn');
+    const resetTestBtn = document.getElementById('resetTestBtn');
+    const targetText = document.getElementById('targetText');
+    const testProgress = document.getElementById('testProgress');
+    const matchStatus = document.getElementById('matchStatus');
+
+    // right now it's just doing a simple comparison after cleaning up the text
+    function checkSentenceMatch(predicted, target) {
+      const cleanPredicted = predicted.replace(/[.,!?]/g, '').toLowerCase().trim();
+      const cleanTarget = target.replace(/[.,!?]/g, '').toLowerCase().trim();
+      
+      const isMatch = cleanPredicted === cleanTarget;
+      const matchDetails = {
+        isMatch,
+        predicted: cleanPredicted,
+        target: cleanTarget,
+        timestamp: Date.now()
+      };
+      
+      matchStatus.textContent = isMatch ? '✓ Correct Match!' : '✗ Incorrect Match';
+      matchStatus.className = `match-status ${isMatch ? 'correct' : 'incorrect'}`;
+      
+      const details = document.createElement('div');
+      details.className = 'match-details';
+      if (!isMatch) {
+        details.textContent = `Expected: "${target}"\nGot: "${predicted}"`;
+      }
+      matchStatus.appendChild(details);
+      
+      return matchDetails;
+    }
+
+    function initializeTesting() {
+      targetText.textContent = targetSentences[currentSentenceIndex];
+      testProgress.textContent = `Sentence ${currentSentenceIndex + 1}/20`;
+      matchStatus.textContent = '';
+      matchStatus.className = 'match-status';
+    }
+
+
+    // BEGIN
+    toggleTestingBtn.addEventListener('click', () => {
+      isTestingMode = !isTestingMode;
+      toggleTestingBtn.textContent = isTestingMode ? 'Disable Testing Mode' : 'Enable Testing Mode';
+      toggleTestingBtn.classList.toggle('active');
+      nextSentenceBtn.disabled = !isTestingMode;
+      resetTestBtn.disabled = !isTestingMode;
+      
+      if (isTestingMode) {
+        // Do NOT set testData.startTime here!
+        testData.startTime = null;
+        testData.currentSentence = targetSentences[currentSentenceIndex];
+        testData.entries = [];
+        testData.results = [];
+        testData.textStream = [];
+        recordTextStreamEvent('test_start', testData.currentSentence, 0);
+      }
+    });
+
+    nextSentenceBtn.addEventListener('click', () => {
+      if (currentSentenceIndex < targetSentences.length - 1) {
+        if (testData.entries.length > 0) {
+          const lastEntry = testData.entries[testData.entries.length - 1];
+          const matchResult = checkSentenceMatch(lastEntry.value, testData.currentSentence);
+          testData.results.push(matchResult);
+        }
+        
+        currentSentenceIndex++;
+        initializeTesting();
+        testData.startTime = null; // Reset timer for new sentence
+        testData.currentSentence = targetSentences[currentSentenceIndex];
+        testData.entries = [];
+        recordTextStreamEvent('sentence_start', testData.currentSentence, 0);
+      }
+    });
+
+    resetTestBtn.addEventListener('click', () => {
+      currentSentenceIndex = 0;
+      initializeTesting();
+      testData.startTime = null; // Reset timer for new test
+      testData.currentSentence = targetSentences[currentSentenceIndex];
+      testData.entries = [];
+      testData.results = [];
+      testData.textStream = [];
+      // Reset text content and cursor
+      textContent = "";
+      cursorIndex = 0;
+      renderOutput(); // Update the display
+      recordTextStreamEvent('test_start', testData.currentSentence, 0);
+    });
+
+    // END
+
+
+
+
+
+    
+
+    const originalOutputBox = outputBox.textContent;
+    Object.defineProperty(outputBox, 'textContent', {
+      set: function(value) {
+        if (isTestingMode) {
+          const timestamp = Date.now();
+          const entry = {
+            timestamp,
+            value,
+            target: testData.currentSentence
+          };
+          testData.entries.push(entry);
+        }
+        this.textContent = value;
+      },
+      get: function() {
+        return this.textContent;
+      }
+    });
+
+    initializeTesting();
+
+    // BEGIN 
+
+    // Function to calculate adjusted WPM
+    function calculateAdjustedWPM(textStream) {
+      let lastSentenceStartIdx = -1;
+      for (let i = textStream.length - 1; i >= 0; i--) {
+        if (textStream[i].type === 'sentence_start' || textStream[i].type === 'test_start') {
+          lastSentenceStartIdx = i;
+          break;
+        }
+      }
+      const currentSentenceStream = lastSentenceStartIdx >= 0 ? textStream.slice(lastSentenceStartIdx + 1) : textStream;
+
+      // Only count visible character inserts and ignore timestamp 0
+      const charEvents = currentSentenceStream.filter(
+        event => event.type === 'insert' && event.value.match(/[a-zA-Z0-9]/) && event.timestamp > 0
+      );
+      if (charEvents.length < 2) return 0;
+      const numChars = charEvents.length;
+      const start = charEvents[0].timestamp;
+      const end = charEvents[charEvents.length - 1].timestamp;
+      const minutes = (end - start) / 60000;
+      if (minutes <= 0) return 0;
+      const words = numChars / 5;
+      return Math.round(words / minutes);
+    }
+    
+
+    // Function to calculate MSD
+    function calculateMSD(target, typed) {
+      const clean = str => str.replace(/[.,!?]/g, '').toLowerCase().trim();
+      const a = clean(target);
+      const b = clean(typed);
+
+      const dp = Array(a.length + 1).fill(null).map(() => Array(b.length + 1).fill(0));
+      for (let i = 0; i <= a.length; i++) dp[i][0] = i;
+      for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+      for (let i = 1; i <= a.length; i++) {
+        for (let j = 1; j <= b.length; j++) {
+          if (a[i - 1] === b[j - 1]) {
+            dp[i][j] = dp[i - 1][j - 1];
+          } else {
+            dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+          }
+        }
+      }
+      return dp[a.length][b.length];
+    }
+
+    // Update metrics display
+    function updateMetricsDisplay() {
+      const adjustedWPM = calculateAdjustedWPM(testData.textStream);
+      // Only calculate MSD if we have actual text content
+      const msd = textContent.trim() ? calculateMSD(testData.currentSentence, textContent) : 0;
+      document.getElementById('adjustedWPM').textContent = adjustedWPM;
+      document.getElementById('msd').textContent = msd;
+    }
+
+    // END
   </script>
 </body>
 </html>
