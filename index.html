@@ -193,6 +193,53 @@
       font-size: 14px;
       font-weight: normal;
     }
+
+    /* Popup styles */
+    .popup-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .popup-content {
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      max-width: 500px;
+      width: 90%;
+    }
+
+    .popup-content h2 {
+      margin-top: 0;
+      color: #333;
+    }
+
+    .popup-content button {
+      padding: 10px 20px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+
+    .popup-content button:hover {
+      background: #45a049;
+    }
+
+    .metrics-summary {
+      margin: 20px 0;
+      line-height: 1.6;
+    }
   </style>
 </head>
 <body>
@@ -233,6 +280,15 @@
     <div class="metrics-display">
       <h4>Test Progress</h4>
       <div id="testProgress">Sentence 0/20</div>
+    </div>
+  </div>
+
+  <!-- Add popup overlay -->
+  <div id="resultsPopup" class="popup-overlay">
+    <div class="popup-content">
+      <h2>Test Results</h2>
+      <div id="metricsSummary" class="metrics-summary"></div>
+      <button id="downloadCsvBtn">Download CSV</button>
     </div>
   </div>
 
@@ -318,19 +374,21 @@
       }
     }
 
+    let testData = {
+      startTime: null,
+      entries: [],
+      currentSentence: null,
+      results: [],
+      textStream: [],  // this is the main thing you'll need.it has every single keystroke with timestamps
+      completedSentences: 0  // Add counter for completed sentences
+    };
+
     // yo sid I'm leaving you a bunch of comments for the textStream implementation. It should help give a clear idea
     // of what's going on with the test/stream so you can do the metrics extraction
     // the textStream array has everything you need. each event has a timestamp and the exact character that was typed
     // for wpm you'll want to look at the time between each 'insert' event in the textStream
     // the 'currentText' field shows you what the text looked like at each point which you should prob use for msd
     // btw we're ignoring punctuation and case when checking matches, so you prob want to do the same for msd
-    let testData = {
-      startTime: null,
-      entries: [],
-      currentSentence: null,
-      results: [],
-      textStream: []  // this is the main thing you'll need.it has every single keystroke with timestamps
-    };
 
     // this function records every single thing that happens
     //  timestamp is in milliseconds since the start of the test which you should keep in mind for calculating wpm
@@ -352,6 +410,10 @@
     }
 
     function recognizeText() {
+      console.log("=== RECOGNIZE TEXT ===");
+      console.log("Current sentence index:", currentSentenceIndex + 1);
+      console.log("Is testing mode:", isTestingMode);
+      
       const imageDataURL = canvas.toDataURL('image/png');
       Tesseract.recognize(
         imageDataURL,
@@ -359,10 +421,9 @@
         { logger: m => console.log(m) }
       ).then(({ data: { text } }) => {
         const cleanText = text.replace(/\n/g, ' ').trim();
+        console.log("Recognized text:", cleanText);
+        
         if (cleanText) {
-          // this where we record each character as it's typed
-          // important for wpm cuz itgives you the exact time each character was entered
-          // we're recording them one at a time so you can calculate the time between each character
           for (let i = 0; i < cleanText.length; i++) {
             const char = cleanText[i];
             textContent =
@@ -370,7 +431,6 @@
             cursorIndex++;
             recordTextStreamEvent('insert', char, cursorIndex - 1);
           }
-          // adding a space after each word is also recorded as a separate event
           textContent =
             textContent.slice(0, cursorIndex) + ' ' + textContent.slice(cursorIndex);
           cursorIndex++;
@@ -379,15 +439,18 @@
           renderOutput();
 
           if (isTestingMode) {
-            // this is where we check if the text matches the target
-            // for msd you might want to use a similar comparison but with a different algorithm
-            // rn we're just doing an exact match after removing punctuation and case
+            console.log("Processing in testing mode");
             const matchResult = checkSentenceMatch(cleanText, testData.currentSentence);
             testData.results.push(matchResult);
-            
-            // recording when each sentence is done which might be useful for you for calcuating wpm per sentence
             recordTextStreamEvent('sentence_complete', cleanText, cursorIndex);
             
+            // index is offset by 1 so that's why we're checking for 19
+            if (currentSentenceIndex === 19) {
+              console.log("On last sentence (20), showing popup");
+              showResultsPopup();
+            } else {
+              console.log("Not on last sentence, current sentence:", currentSentenceIndex + 1);
+            }
           }
         }
       });
@@ -502,7 +565,6 @@
     const testProgress = document.getElementById('testProgress');
     const matchStatus = document.getElementById('matchStatus');
 
-    // right now it's just doing a simple comparison after cleaning up the text
     function checkSentenceMatch(predicted, target) {
       const cleanPredicted = predicted.replace(/[.,!?]/g, '').toLowerCase().trim();
       const cleanTarget = target.replace(/[.,!?]/g, '').toLowerCase().trim();
@@ -524,6 +586,15 @@
         details.textContent = `Expected: "${target}"\nGot: "${predicted}"`;
       }
       matchStatus.appendChild(details);
+
+      
+      testData.completedSentences++;
+      console.log("Completed sentences:", testData.completedSentences);  //debugging
+      
+      if (testData.completedSentences === 20) {
+        console.log("All sentences completed, showing popup");  // debugging
+        setTimeout(() => showResultsPopup(), 1000);
+      }
       
       return matchDetails;
     }
@@ -548,25 +619,176 @@
         testData.entries = [];
         testData.results = [];
         testData.textStream = [];
+        testData.completedSentences = 0;  
         recordTextStreamEvent('test_start', testData.currentSentence, 0);
       }
     });
 
-    nextSentenceBtn.addEventListener('click', () => {
-      if (currentSentenceIndex < targetSentences.length - 1) {
-        if (testData.entries.length > 0) {
-          const lastEntry = testData.entries[testData.entries.length - 1];
-          const matchResult = checkSentenceMatch(lastEntry.value, testData.currentSentence);
-          testData.results.push(matchResult);
+    function calculateWPM(textStream, startTime, endTime) {
+      const insertEvents = textStream.filter(event => event.type === 'insert');
+      if (insertEvents.length < 2) return 0;
+      
+      const timeInMinutes = (endTime - startTime) / (1000 * 60);
+      const wordCount = textStream.filter(event => event.type === 'insert' && event.value === ' ').length;
+      
+      return Math.round(wordCount / timeInMinutes);
+    }
+
+    function calculateMSD(predicted, target) {
+      const cleanPredicted = predicted.replace(/[.,!?]/g, '').toLowerCase().trim();
+      const cleanTarget = target.replace(/[.,!?]/g, '').toLowerCase().trim();
+      
+      const m = cleanPredicted.length;
+      const n = cleanTarget.length;
+      
+      const dp = Array(m + 1).fill().map(() => Array(n + 1).fill(0));
+      
+      for (let i = 0; i <= m; i++) dp[i][0] = i;
+      for (let j = 0; j <= n; j++) dp[0][j] = j;
+      
+
+      for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+          if (cleanPredicted[i - 1] === cleanTarget[j - 1]) {
+            dp[i][j] = dp[i - 1][j - 1];
+          } else {
+            dp[i][j] = Math.min(
+              dp[i - 1][j - 1] + 1, // substitution
+              dp[i - 1][j] + 1,     // deletion
+              dp[i][j - 1] + 1      // insertion
+            );
+          }
+        }
+      }
+      
+      return dp[m][n];
+    }
+
+    function showResultsPopup() {
+      console.log("=== SHOWING POPUP ===");
+      console.log("Current sentence index:", currentSentenceIndex);
+      console.log("Number of results:", testData.results.length);
+      
+      const popup = document.getElementById('resultsPopup');
+      const metricsSummary = document.getElementById('metricsSummary');
+      
+      // fix 
+      const trialMetrics = testData.results.map((result, index) => {
+        const sentenceStart = testData.textStream.findIndex(event => 
+          event.type === 'sentence_start' && event.target === targetSentences[index]);
+        const sentenceEnd = testData.textStream.findIndex(event => 
+          event.type === 'sentence_complete' && event.target === targetSentences[index]);
+        
+        console.log(`Trial ${index + 1}:`, {
+          sentence: targetSentences[index],
+          start: sentenceStart,
+          end: sentenceEnd,
+          predicted: result.predicted,
+          target: result.target
+        });
+        
+        let wpm = 0;
+        if (sentenceStart !== -1 && sentenceEnd !== -1) {
+          const startTime = testData.textStream[sentenceStart].timestamp;
+          const endTime = testData.textStream[sentenceEnd].timestamp;
+          wpm = calculateWPM(
+            testData.textStream.slice(sentenceStart, sentenceEnd + 1),
+            startTime,
+            endTime
+          );
         }
         
-        currentSentenceIndex++;
-        initializeTesting();
-        testData.startTime = Date.now();
-        testData.currentSentence = targetSentences[currentSentenceIndex];
-        testData.entries = [];
-        recordTextStreamEvent('sentence_start', testData.currentSentence, 0);
+        const msd = calculateMSD(result.predicted, result.target);
+        
+        return {
+          sentence: targetSentences[index],
+          wpm,
+          msd,
+          predicted: result.predicted,
+          target: result.target,
+          isMatch: result.isMatch
+        };
+      });
+      
+      // calc averages only for trials with valid WPM
+      const validTrials = trialMetrics.filter(trial => trial.wpm > 0);
+      const avgWPM = validTrials.length > 0 
+        ? Math.round(validTrials.reduce((sum, trial) => sum + trial.wpm, 0) / validTrials.length)
+        : 0;
+      const avgMSD = Math.round(trialMetrics.reduce((sum, trial) => sum + trial.msd, 0) / trialMetrics.length);
+      
+      console.log("Final metrics:", { 
+        avgWPM, 
+        avgMSD, 
+        totalTrials: trialMetrics.length,
+        validTrials: validTrials.length 
+      });
+      
+      metricsSummary.innerHTML = `
+        <p><strong>Average WPM:</strong> ${avgWPM}</p>
+        <p><strong>Average MSD:</strong> ${avgMSD}</p>
+        <p><strong>Total Trials:</strong> ${trialMetrics.length}</p>
+      `;
+      
+      // show popup
+      popup.style.display = 'flex';
+      console.log("Popup should be visible now");
+
+
+      document.getElementById('downloadCsvBtn').onclick = () => {
+        const csvContent = [
+
+          ['Trial', 'Sentence', 'WPM', 'MSD', 'Predicted', 'Target', 'Match'],
+
+          ...trialMetrics.map((trial, index) => [
+            index + 1,
+            trial.sentence,
+            trial.wpm,
+            trial.msd,
+            trial.predicted,
+            trial.target,
+            trial.isMatch ? 'Yes' : 'No'
+          ]),
+
+          ['Average', '', avgWPM, avgMSD, '', '', '']
+        ].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+        
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'handwriting_test_results.csv';
+        link.click();
+      };
+    }
+
+
+    nextSentenceBtn.addEventListener('click', () => {
+      console.log("=== NEXT SENTENCE CLICKED ===");
+      console.log("Current sentence:", currentSentenceIndex + 1);
+      console.log("Is testing mode:", isTestingMode);
+      
+
+      if (currentSentenceIndex === 19) {
+        console.log("On last sentence (20), showing popup");
+        showResultsPopup();
+        return;
       }
+
+
+      if (testData.entries.length > 0) {
+        const lastEntry = testData.entries[testData.entries.length - 1];
+        const matchResult = checkSentenceMatch(lastEntry.value, testData.currentSentence);
+        testData.results.push(matchResult);
+      }
+
+
+      currentSentenceIndex++;
+      console.log("Moving to next sentence, new sentence:", currentSentenceIndex + 1);
+      initializeTesting();
+      testData.startTime = Date.now();
+      testData.currentSentence = targetSentences[currentSentenceIndex];
+      testData.entries = [];
+      recordTextStreamEvent('sentence_start', testData.currentSentence, 0);
     });
 
     // resetting test handler (lowk sometimes this doesn't work)
@@ -578,6 +800,7 @@
       testData.entries = [];
       testData.results = [];
       testData.textStream = [];
+      testData.completedSentences = 0;  
       recordTextStreamEvent('test_start', testData.currentSentence, 0);
     });
 
