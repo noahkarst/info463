@@ -291,9 +291,7 @@
         }
       }
       ctx.stroke();
-    }
-
-    function startDraw(e) {
+    }    function startDraw(e) {
       isDrawing = true;
       const rect = canvas.getBoundingClientRect();
       const x = (e.clientX - rect.left);
@@ -301,6 +299,12 @@
       currentStroke = [{ x, y }];
       ctx.beginPath();
       ctx.moveTo(x, y);
+      
+      // Set the start time when user begins drawing
+      if (isTestingMode && testData.startTime === null) {
+        testData.startTime = Date.now();
+        recordTextStreamEvent('draw_start', '', 0);
+      }
     }
 
     function draw(e) {
@@ -342,33 +346,11 @@
     //  timestamp is in milliseconds since the start of the test which you should keep in mind for calculating wpm
     // the 'type' field tells you what kind of event it was like 'insert' for typing, 'delete' for backspace, etc
     function recordTextStreamEvent(type, value, position) {
-      if (!isTestingMode) return;
-
-      // Only start timer on first actual character insert
-      if (
-        testData.startTime === null &&
-        type === 'insert' &&
-        value.match(/[a-zA-Z0-9]/)
-      ) {
-        // Use a larger initial time window (30 seconds) for more realistic first WPM
-        testData.startTime = Date.now() - 30000;
-      }
-
-      let timestamp;
+      if (!isTestingMode) return;      let timestamp;
       if (type === 'test_start' || type === 'sentence_start') {
-        timestamp = 0;
-      } else if (testData.startTime !== null) {
-        if (type === 'insert') {
-          // Add more realistic spacing between insert events
-          const lastEvent = testData.textStream[testData.textStream.length - 1];
-          if (lastEvent && lastEvent.type === 'insert') {
-            timestamp = lastEvent.timestamp + 1000; // Space inserts 1 second apart for more realistic timing
-          } else {
-            timestamp = Date.now() - testData.startTime;
-          }
-        } else {
-          timestamp = Date.now() - testData.startTime;
-        }
+        timestamp = 0;      } else if (testData.startTime !== null) {
+        // Use actual timestamps for all events
+        timestamp = Date.now() - testData.startTime;
       } else {
         timestamp = 0;
       }
@@ -420,12 +402,16 @@
     function recognizeText() {
       const preprocessedCanvas = preprocessCanvas(canvas);
       const imageDataURL = preprocessedCanvas.toDataURL('image/png');
-        
-      Tesseract.recognize(imageDataURL, 'eng', {
+          Tesseract.recognize(imageDataURL, 'eng', {
         logger: m => console.log(m)
       }).then(({ data: { text } }) => {
         const cleanText = text.replace(/\n/g, ' ').trim();
         if (cleanText) {
+          // Clear existing text and reset cursor
+          textContent = "";
+          cursorIndex = 0;
+          
+          // Add new text
           for (let i = 0; i < cleanText.length; i++) {
             const char = cleanText[i];
             textContent =
@@ -684,28 +670,23 @@
     // BEGIN 
 
     // Function to calculate adjusted WPM
-    function calculateAdjustedWPM(textStream) {
-      let lastSentenceStartIdx = -1;
-      for (let i = textStream.length - 1; i >= 0; i--) {
-        if (textStream[i].type === 'sentence_start' || textStream[i].type === 'test_start') {
-          lastSentenceStartIdx = i;
-          break;
-        }
-      }
-      const currentSentenceStream = lastSentenceStartIdx >= 0 ? textStream.slice(lastSentenceStartIdx + 1) : textStream;
+    function calculateAdjustedWPM(textStream) {      // Find when drawing started
+      const drawStartEvent = textStream.find(event => event.type === 'draw_start');
+      if (!drawStartEvent) return 0;
 
-      // Only count visible character inserts and ignore timestamp 0
-      const charEvents = currentSentenceStream.filter(
+      // Get all alphanumeric character inserts
+      const charEvents = textStream.filter(
         event => event.type === 'insert' && event.value.match(/[a-zA-Z0-9]/) && event.timestamp > 0
       );
-      if (charEvents.length < 2) return 0;
+      
+      if (charEvents.length === 0) return 0;
+      
       const numChars = charEvents.length;
-      const start = charEvents[0].timestamp;
-      const end = charEvents[charEvents.length - 1].timestamp;
-      const minutes = (end - start) / 60000;
+      const start = drawStartEvent.timestamp;
+      const end = charEvents[charEvents.length - 1].timestamp;      const minutes = (end - start) / 60000;
       if (minutes <= 0) return 0;
       const words = numChars / 5;
-      return Math.round(words / minutes);
+      return (words / minutes).toFixed(2);
     }
     
 
