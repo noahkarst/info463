@@ -457,14 +457,23 @@
     }
 
     function backspaceOutput() {
+      if (textContent.length === 0) return;
+
+      let deletedChar;
+
       if (cursorIndex > 0) {
-        const deletedChar = textContent[cursorIndex - 1];
+        deletedChar = textContent[cursorIndex - 1];
         textContent = textContent.slice(0, cursorIndex - 1) + textContent.slice(cursorIndex);
         cursorIndex--;
-        renderOutput();
-        recordTextStreamEvent('delete', deletedChar, cursorIndex);
+      } else {
+        deletedChar = textContent[0];
+        textContent = textContent.slice(1);
       }
+
+      renderOutput();
+      recordTextStreamEvent('delete', deletedChar, cursorIndex);
     }
+
 
     clearBtn.addEventListener('click', () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -644,30 +653,6 @@
 
     // END
 
-
-
-
-
-    
-
-    const originalOutputBox = outputBox.textContent;
-    Object.defineProperty(outputBox, 'textContent', {
-      set: function(value) {
-        if (isTestingMode) {
-          const timestamp = Date.now();
-          const entry = {
-            timestamp,
-            value,
-            target: testData.currentSentence
-          };
-          testData.entries.push(entry);
-        }
-        this.textContent = value;
-      },
-      get: function() {
-        return this.textContent;
-      }
-    });
 
     initializeTesting();
 
