@@ -398,6 +398,8 @@
       const preprocessedCanvas = preprocessCanvas(canvas);
       const imageDataURL = preprocessedCanvas.toDataURL('image/png');
           Tesseract.recognize(imageDataURL, 'eng', {
+        langPath: '/models/eng.traineddata',
+        tessedit_char_whitelist: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ .',
         logger: m => console.log(m)
       }).then(({ data: { text } }) => {
         const cleanText = text.replace(/\n/g, ' ').trim();
