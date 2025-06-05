@@ -191,7 +191,7 @@
 <body>
   <div class="app">
     <div class="input-area">
-      <h3>Draw Your Words Here in the Input Canvas:</h3>
+      <h3>Draw Large, Clear, and Centered words in the Canvas:</h3>
       <canvas id="drawCanvas"></canvas>
       <div class="controls">
         <button id="clearBtn">Clear Board✌</button>
@@ -395,20 +395,37 @@
     
     
     
+    function preprocessCanvas(canvas) {
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d');
+
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+      tempCtx.drawImage(canvas, 0, 0);
+
+      const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+      const data = imageData.data;
+
+      // Convert to grayscale and threshold
+      for (let i = 0; i < data.length; i += 4) {
+        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        const binarized = avg > 150 ? 255 : 0;
+        data[i] = data[i + 1] = data[i + 2] = binarized;
+      }
     
+      tempCtx.putImageData(imageData, 0, 0);
+      return tempCanvas;
+    }
 
     function recognizeText() {
-      const imageDataURL = canvas.toDataURL('image/png');
-      Tesseract.recognize(
-        imageDataURL,
-        'eng',
-        { logger: m => console.log(m) }
-      ).then(({ data: { text } }) => {
+      const preprocessedCanvas = preprocessCanvas(canvas);
+      const imageDataURL = preprocessedCanvas.toDataURL('image/png');
+        
+      Tesseract.recognize(imageDataURL, 'eng', {
+        logger: m => console.log(m)
+      }).then(({ data: { text } }) => {
         const cleanText = text.replace(/\n/g, ' ').trim();
         if (cleanText) {
-          // this where we record each character as it's typed
-          // important for wpm cuz itgives you the exact time each character was entered
-          // we're recording them one at a time so you can calculate the time between each character
           for (let i = 0; i < cleanText.length; i++) {
             const char = cleanText[i];
             textContent =
@@ -416,28 +433,21 @@
             cursorIndex++;
             recordTextStreamEvent('insert', char, cursorIndex - 1);
           }
-          // adding a space after each word is also recorded as a separate event
           textContent =
             textContent.slice(0, cursorIndex) + ' ' + textContent.slice(cursorIndex);
           cursorIndex++;
           recordTextStreamEvent('insert', ' ', cursorIndex - 1);
-          
           renderOutput();
-
+        
           if (isTestingMode) {
-            // this is where we check if the text matches the target
-            // for msd you might want to use a similar comparison but with a different algorithm
-            // rn we're just doing an exact match after removing punctuation and case
             const matchResult = checkSentenceMatch(cleanText, testData.currentSentence);
             testData.results.push(matchResult);
-            
-            // recording when each sentence is done which might be useful for you for calcuating wpm per sentence
             recordTextStreamEvent('sentence_complete', cleanText, cursorIndex);
-            
           }
         }
       });
     }
+
 
     function renderOutput() {
       if (!textContent) {
