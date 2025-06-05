@@ -86,11 +86,52 @@
     
     .output-controls {
       display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .output-row {
+      display: flex;
       gap: 10px;
       justify-content: center;
     }
 
-        .testing-controls button.active {
+    .output-row button {
+      padding: 10px;
+      font-size: 14px;
+      background: #ddd;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .top-row {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+      justify-content: space-between;
+    }
+
+    .top-row button {
+      flex: 1;
+      max-width: none;
+    }
+
+    .bottom-row {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .output-row button {
+      flex: 1;              
+      max-width: none;      
+    }
+
+
+    .testing-controls button.active {
       background: #4CAF50;
       color: white;
     }
@@ -164,11 +205,18 @@
       <div class="output-header">Output Text</div>
       <div class="output-box" id="outputBox">_</div>
       <div class="output-controls">
-        <button id="leftArrowBtn">←</button>
-        <button id="rightArrowBtn">→</button>
-        <button id="backspaceBtn">⌫</button>
-        <button id="copyBtn">Copy Text</button>
+        <div class="output-row top-row">
+          <button id="leftArrowBtn">←</button>
+          <button id="rightArrowBtn">→</button>
+          <button id="backspaceBtn">⌫</button>
+          <button id="spaceBtn">Space</button>
+        </div>
+        <div class="output-row bottom-row">
+          <button id="copyBtn">Copy Text</button>
+          <button id="submitBtn">[Submit Test]</button>
+        </div>
       </div>
+      
 
       <div class="testing-info">
         <div class="target-container">
@@ -206,6 +254,7 @@
     const backspaceBtn = document.getElementById('backspaceBtn');
     const leftArrowBtn = document.getElementById('leftArrowBtn');
     const rightArrowBtn = document.getElementById('rightArrowBtn');
+    const spaceBtn = document.getElementById('spaceBtn');
 
     let isDrawing = false;
     let strokes = [];
@@ -454,6 +503,14 @@
         recordTextStreamEvent('cursor_move', 'right', cursorIndex);
       }
     });
+
+    spaceBtn.addEventListener('click', () => {
+      textContent = textContent.slice(0, cursorIndex) + ' ' + textContent.slice(cursorIndex);
+      cursorIndex++;
+      renderOutput();
+      recordTextStreamEvent('insert', ' ', cursorIndex - 1);
+    });
+
 
     recognizeBtn.addEventListener('click', recognizeText);
     copyBtn.addEventListener('click', copyToClipboard);
