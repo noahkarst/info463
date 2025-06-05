@@ -442,8 +442,7 @@
         updateMetricsDisplay();
       }
     }
-    
-    function recognizeText() {
+      function recognizeText() {
       console.log("=== RECOGNIZE TEXT ===");
       console.log("Current sentence index:", currentSentenceIndex + 1);
       console.log("Is testing mode:", isTestingMode);
@@ -458,6 +457,9 @@
         console.log("Recognized text:", cleanText);
         
         if (cleanText) {
+          textContent = "";
+          cursorIndex = 0;
+          
           for (let i = 0; i < cleanText.length; i++) {
             const char = cleanText[i];
             textContent =
