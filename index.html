@@ -130,6 +130,10 @@
       max-width: none;      
     }
 
+    .green-button {
+        background-color: #4CAF50 !important;
+        color: white !important;
+    }
 
     .testing-controls button.active {
       background: #4CAF50;
@@ -143,7 +147,7 @@
     }
     
     .target-text {
-      color: red;
+      color: rgb(0, 109, 225);
       font-weight: bold;
     }
     
@@ -213,7 +217,7 @@
         </div>
         <div class="output-row bottom-row">
           <button id="copyBtn">Copy Text</button>
-          <button id="submitBtn">[Submit Test]</button>
+          <button id="submitBtn">Submit Test</button>
         </div>
       </div>
       
@@ -222,10 +226,10 @@
         <div class="target-container">
           <h4>Target Sentence</h4>
           <div id="targetText" class="target-text"></div>
+          <div id="testProgress">Sentence 0/20</div>
         </div>        <div class="metrics" id="metricsDisplay" style="display: none;">
           <div><strong>Adjusted WPM:</strong> <span id="adjustedWPM">0</span></div>
           <div><strong>MSD:</strong> <span id="msd">0</span></div>
-          <div id="testProgress">Sentence 0/20</div>
         </div>
 
         <div class="match-status" id="matchStatus"></div>
@@ -398,9 +402,6 @@
       }).then(({ data: { text } }) => {
         const cleanText = text.replace(/\n/g, ' ').trim();
         if (cleanText) {
-          // Clear existing text and reset cursor
-          textContent = "";
-          cursorIndex = 0;
           
           // Add new text
           for (let i = 0; i < cleanText.length; i++) {
@@ -572,9 +573,7 @@
       
       const details = document.createElement('div');
       details.className = 'match-details';
-      if (!isMatch) {
-        details.textContent = `Expected: "${target}"\nGot: "${predicted}"`;
-      }
+ 
       matchStatus.appendChild(details);
       
       return matchDetails;
@@ -594,6 +593,14 @@
       isTestingMode = !isTestingMode;
       toggleTestingBtn.textContent = isTestingMode ? 'Disable Testing Mode' : 'Enable Testing Mode';
       toggleTestingBtn.classList.toggle('active');
+            if (isTestingMode) {
+          toggleTestingBtn.classList.add('green-button');
+          submitBtn.classList.add('green-button');
+        } else {
+          toggleTestingBtn.classList.remove('green-button');
+          submitBtn.classList.remove('green-button');
+        }
+
       nextSentenceBtn.disabled = !isTestingMode;
       resetTestBtn.disabled = !isTestingMode;
       
@@ -680,7 +687,7 @@
 
     // Function to calculate MSD
     function calculateMSD(target, typed) {
-      const clean = str => str.replace(/[.,!?]/g, '').toLowerCase().trim();
+      const clean = str => str.replace(/[^a-zA-Z .]/g, '').toLowerCase().trim();
       const a = clean(target);
       const b = clean(typed);
 
