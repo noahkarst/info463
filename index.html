@@ -222,9 +222,7 @@
         <div class="target-container">
           <h4>Target Sentence</h4>
           <div id="targetText" class="target-text"></div>
-        </div>
-
-        <div class="metrics">
+        </div>        <div class="metrics" id="metricsDisplay" style="display: none;">
           <div><strong>Adjusted WPM:</strong> <span id="adjustedWPM">0</span></div>
           <div><strong>MSD:</strong> <span id="msd">0</span></div>
           <div id="testProgress">Sentence 0/20</div>
@@ -353,9 +351,7 @@
         timestamp = Date.now() - testData.startTime;
       } else {
         timestamp = 0;
-      }
-
-      const event = {
+      }      const event = {
         timestamp,
         type,
         value,
@@ -364,11 +360,6 @@
         currentText: textContent
       };
       testData.textStream.push(event);
-      
-      // Only update metrics for insert events or sentence completion
-      if (type === 'insert' || type === 'sentence_complete') {
-        updateMetricsDisplay();
-      }
     }
     
     
@@ -424,10 +415,7 @@
           cursorIndex++;
           recordTextStreamEvent('insert', ' ', cursorIndex - 1);
           renderOutput();
-        
           if (isTestingMode) {
-            const matchResult = checkSentenceMatch(cleanText, testData.currentSentence);
-            testData.results.push(matchResult);
             recordTextStreamEvent('sentence_complete', cleanText, cursorIndex);
           }
         }
@@ -602,7 +590,6 @@
     }
 
 
-    // BEGIN
     toggleTestingBtn.addEventListener('click', () => {
       isTestingMode = !isTestingMode;
       toggleTestingBtn.textContent = isTestingMode ? 'Disable Testing Mode' : 'Enable Testing Mode';
@@ -610,8 +597,10 @@
       nextSentenceBtn.disabled = !isTestingMode;
       resetTestBtn.disabled = !isTestingMode;
       
+      const metricsDisplay = document.getElementById('metricsDisplay');
+      metricsDisplay.style.display = 'none';
+      
       if (isTestingMode) {
-        // Do NOT set testData.startTime here!
         testData.startTime = null;
         testData.currentSentence = targetSentences[currentSentenceIndex];
         testData.entries = [];
@@ -620,7 +609,6 @@
         recordTextStreamEvent('test_start', testData.currentSentence, 0);
       }
       
-      // Update the display after toggling testing mode
       initializeTesting();
     });
 
@@ -636,6 +624,7 @@
         testData.startTime = null; // Reset timer for new sentence
         testData.currentSentence = targetSentences[currentSentenceIndex];
         testData.entries = [];
+        document.getElementById('metricsDisplay').style.display = 'none';
         recordTextStreamEvent('sentence_start', testData.currentSentence, 0);
       } else {
         // If we're on the last sentence, store the last result and show popup
@@ -645,9 +634,7 @@
         }
         showResultsPopup();
       }
-    });
-
-    resetTestBtn.addEventListener('click', () => {
+    });    resetTestBtn.addEventListener('click', () => {
       currentSentenceIndex = 0;
       initializeTesting();
       testData.startTime = null; // Reset timer for new test
@@ -659,6 +646,7 @@
       textContent = "";
       cursorIndex = 0;
       renderOutput(); // Update the display
+      document.getElementById('metricsDisplay').style.display = 'none';
       recordTextStreamEvent('test_start', testData.currentSentence, 0);
     });
 
@@ -709,15 +697,22 @@
         }
       }
       return dp[a.length][b.length];
-    }
-
-    // Update metrics display
-    function updateMetricsDisplay() {
+    }    // Update metrics display
+    function updateMetricsDisplay(forceShow = false) {
+      const metricsDisplay = document.getElementById('metricsDisplay');
+      if (!isTestingMode) {
+        metricsDisplay.style.display = 'none';
+        return;
+      }
+      
       const adjustedWPM = calculateAdjustedWPM(testData.textStream);
-      // Only calculate MSD if we have actual text content
       const msd = textContent.trim() ? calculateMSD(testData.currentSentence, textContent) : 0;
       document.getElementById('adjustedWPM').textContent = adjustedWPM;
       document.getElementById('msd').textContent = msd;
+      
+      if (forceShow) {
+        metricsDisplay.style.display = 'block';
+      }
     }
 
     // END
@@ -877,15 +872,14 @@
 
       document.body.appendChild(overlay);
       document.body.appendChild(modal);
-    }
-
-    // Modify submitBtn event listener to store current result before showing popup
+    }    // Submit button handler to show metrics and store results
     const submitBtn = document.getElementById('submitBtn');
     submitBtn.addEventListener('click', () => {
       if (isTestingMode && textContent.trim()) {
         const matchResult = checkSentenceMatch(textContent, testData.currentSentence);
         testData.results.push(matchResult);
-        showResultsPopup();
+        // Show metrics when submit is clicked
+        updateMetricsDisplay(true);
       }
     });
   </script>
